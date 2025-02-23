@@ -103,7 +103,7 @@ impl CompressedVocab {
                 text_buf.extend(v);
                 off
             });
-            slices[i] = (off, v.len());
+            slices[i] = (off, v.len())
         }
         Self {
             // 锁定字符串内容的位置，以实现安全的自引用
@@ -118,7 +118,7 @@ const BYTES: [u8; 256] = {
     let mut i = 0usize;
     while i < 256 {
         bytes[i] = i as _;
-        i += 1;
+        i += 1
     }
     bytes
 };

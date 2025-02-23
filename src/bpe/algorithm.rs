@@ -1,4 +1,4 @@
-﻿use super::{utok, Bpe};
+﻿use super::{Bpe, utok};
 use std::{
     cmp::Ordering::{self, Equal},
     collections::BinaryHeap,
@@ -43,16 +43,16 @@ impl Bpe {
                         pos..i + c.len(),
                         (marks[pos].token, token),
                     ) {
-                        merges.push(merge);
+                        merges.push(merge)
                     }
                 }
                 Some(i)
             } else {
                 for (&b, mark) in zip(c, &mut marks[i..]) {
-                    mark.token = self.bytes[b as usize];
+                    mark.token = self.bytes[b as usize]
                 }
                 None
-            };
+            }
         }
 
         MergeState {
@@ -173,7 +173,7 @@ impl MergeState<'_, '_> {
                     let l3 = self.bpe.token(t3).len();
                     let p4 = p3 + l3;
                     if let Some(merge) = self.bpe.build_merge(self.text, p1..p4, (merge, t3)) {
-                        self.merges.push(merge);
+                        self.merges.push(merge)
                     }
                 }
             }
@@ -184,7 +184,7 @@ impl MergeState<'_, '_> {
                     let p0 = p1 - l0;
                     let t0 = self.marks[p0].token;
                     if let Some(merge) = self.bpe.build_merge(self.text, p0..p3, (t0, merge)) {
-                        self.merges.push(merge);
+                        self.merges.push(merge)
                     }
                 }
             }

@@ -1,4 +1,4 @@
-﻿use crate::{utok, Method};
+﻿use crate::{Method, utok};
 use regex::Regex;
 use std::{
     collections::{HashMap, HashSet},
@@ -52,7 +52,7 @@ impl<M: Method> Tokeneer<M> {
             for m in self.special_regex.find_iter(text) {
                 ans.extend(self.method.encode(&text[start..m.start()]));
                 ans.extend_from_slice(&self.special[m.as_str()]);
-                start = m.end();
+                start = m.end()
             }
         }
         ans.extend(self.method.encode(&text[start..]));
@@ -62,7 +62,7 @@ impl<M: Method> Tokeneer<M> {
     pub fn decode(&self, tokens: &[utok]) -> String {
         let mut ans = Vec::new();
         for &t in tokens {
-            ans.extend_from_slice(self.method.decode(t));
+            ans.extend_from_slice(self.method.decode(t))
         }
         String::from_utf8(ans).unwrap()
     }
@@ -75,16 +75,16 @@ impl<M> Tokeneer<M> {
         for (k, v) in patterns {
             match self.special.entry(k) {
                 Occupied(entry) => {
-                    assert_eq!(&**entry.get(), &v);
+                    assert_eq!(&**entry.get(), &v)
                 }
                 Vacant(entry) => {
                     entry.insert(TokenSeq::Multi(v.into_boxed_slice()));
-                    any = true;
+                    any = true
                 }
             }
         }
         if any {
-            self.special_regex = build_pattern(self.special.keys());
+            self.special_regex = build_pattern(self.special.keys())
         }
     }
 
@@ -105,11 +105,11 @@ fn build_pattern<'a>(text: impl IntoIterator<Item = &'a String>) -> Regex {
     for p in text {
         for c in p.chars() {
             if SPECIAL.contains(&c) {
-                pattern.push('\\');
+                pattern.push('\\')
             }
-            pattern.push(c);
+            pattern.push(c)
         }
-        pattern.push('|');
+        pattern.push('|')
     }
     pattern.pop();
 

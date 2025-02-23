@@ -1,8 +1,8 @@
 [package]
 name = "tokeneer"
 description = "Another tokenizer crate"
-version = "0.0.2"
-edition = "2021"
+version = "0.1.0"
+edition = "2024"
 authors = ["YdrMaster <ydrml@hotmail.com>"]
 repository = "https://github.com/InfiniTensor/tokeneer"
 documentation = "https://docs.rs/tokeneer"
@@ -12,6 +12,6 @@ keywords = ["tokenizer", "bpe", "nlp"]
 categories = ["algorithms", "encoding"]
 
 [dependencies]
-regex = "1.10"
+regex = "1.11"
 memchr = "2.7"
-patricia_tree = "0.8"
+patricia_tree = "0.9"

@@ -3,9 +3,8 @@
 mod algorithm;
 
 use crate::{
-    utok,
+    Method, utok,
     vocab::{CollectedVocab, CompressedVocab},
-    Method,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -272,7 +271,7 @@ mod bpe_tests {
                 bpe.vocab_size(),
                 bpe._vocabs.len(),
             );
-            println!("inaccessible: {inaccessible:#?}");
+            println!("inaccessible: {inaccessible:#?}")
         }
     }
 
@@ -335,7 +334,7 @@ mod bpe_tests {
             .iter()
             .flat_map(|&t| bpe.decode(t).iter().copied())
             .collect();
-        assert_eq!(std::str::from_utf8(&decoded), Ok("abcd<unk>"));
+        assert_eq!(std::str::from_utf8(&decoded), Ok("abcd<unk>"))
     }
 
     #[test]
@@ -372,6 +371,6 @@ mod bpe_tests {
         let bpe = Bpe::new(vocabs, scores, is_byte, 0);
 
         let encoded: Vec<_> = bpe.encode("aAB").into_iter().collect();
-        assert_eq!(encoded, [0, 2, 3], "Expected 3 tokens for input 'aAB'");
+        assert_eq!(encoded, [0, 2, 3], "Expected 3 tokens for input 'aAB'")
     }
 }

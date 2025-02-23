@@ -1,9 +1,8 @@
 ﻿//! l-p-e for Longest Prefix Encoding
 
 use crate::{
-    utok,
+    Method, utok,
     vocab::{CollectedVocab, CompressedVocab},
-    Method,
 };
 use patricia_tree::PatriciaMap;
 use std::{collections::HashSet, pin::Pin};
@@ -104,7 +103,7 @@ impl Method for Lpe {
                 None => (self.bytes[text[0] as usize], 1),
             };
             tokens.push(tok);
-            text = &text[len..];
+            text = &text[len..]
         }
 
         tokens
