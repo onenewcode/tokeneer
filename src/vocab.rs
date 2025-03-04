@@ -1,7 +1,8 @@
 ﻿//! 这个模块提供对词表的预处理功能，这些功能适用于多种不同算法的分词器。
 
 use crate::utok;
-use std::{iter::zip, pin::Pin, slice::from_ref};
+use log::trace;
+use std::{iter::zip, pin::Pin, slice::from_ref, str::from_utf8_unchecked};
 
 /// 收集和预处理词表。
 ///
@@ -19,64 +20,70 @@ pub(crate) struct CollectedVocab<'s> {
     pub total_len: usize,
     /// 字节词到词序号的映射
     pub bytes: Box<[utok; 256]>,
+    /// 特殊词汇
+    pub special: Box<[utok]>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum TokenType {
+    Unknown,
+    Normal,
+    Control,
+    UserDefined,
+    Byte,
 }
 
 impl<'s> CollectedVocab<'s> {
-    /// 收集词表，并对字节词进行转义。
-    pub fn collect(vocabs: impl IntoIterator<Item = &'s [u8]>, unk: utok) -> Self {
-        let mut bytes = Box::new([unk; 256]);
-        let mut total_len = 0;
-        let vocabs = vocabs
-            .into_iter()
-            .enumerate()
-            .map(|(i, piece)| {
-                let piece = match as_byte_token(piece) {
-                    Some(b) => {
-                        let b = b as usize;
-                        bytes[b] = i as _;
-                        from_ref(&BYTES[b])
-                    }
-                    None => piece,
-                };
-                total_len += piece.len();
-                piece
-            })
-            .collect();
-        Self {
-            vocabs,
-            total_len,
-            bytes,
-        }
-    }
-
-    /// 收集词表，根据提示决定一个词是否是单字节词。
-    pub fn collect_with_hint(
-        vocabs: impl IntoIterator<Item = &'s [u8]>,
-        is_byte: impl IntoIterator<Item = bool>,
+    /// 收集词表。
+    pub fn collect(
+        vocabs_: impl IntoIterator<Item = &'s [u8]>,
+        token_type: impl IntoIterator<Item = TokenType>,
         unk: utok,
     ) -> Self {
         let mut bytes = Box::new([unk; 256]);
         let mut total_len = 0;
-        let vocabs = zip(vocabs, is_byte)
-            .enumerate()
-            .map(|(i, (piece, is_byte))| {
-                let piece = if is_byte {
+
+        let mut vocabs = Vec::new();
+        let mut special = Vec::new();
+        for (i, (piece, tt)) in zip(vocabs_, token_type).enumerate() {
+            let piece = match tt {
+                TokenType::Byte => {
+                    trace!("find {tt:?}: {} @ {i}", unsafe {
+                        from_utf8_unchecked(piece)
+                    });
                     let b = as_byte_token(piece)
                         .unwrap_or_else(|| panic!("{piece:?} is not a valid byte token"))
                         as usize;
                     bytes[b] = i as _;
                     from_ref(&BYTES[b])
-                } else {
+                }
+                TokenType::Unknown | TokenType::Control | TokenType::UserDefined => {
+                    trace!("find {tt:?}: {} @ {i}", unsafe {
+                        from_utf8_unchecked(piece)
+                    });
+                    special.push(i as _);
                     piece
-                };
-                total_len += piece.len();
-                piece
-            })
-            .collect();
+                }
+                _ => {
+                    let piece = match as_byte_token(piece) {
+                        Some(b) => {
+                            let b = b as usize;
+                            bytes[b] = i as _;
+                            from_ref(&BYTES[b])
+                        }
+                        None => piece,
+                    };
+                    piece
+                }
+            };
+            vocabs.push(piece);
+            total_len += piece.len()
+        }
         Self {
             vocabs,
             total_len,
             bytes,
+            special: special.into_boxed_slice(),
         }
     }
 }

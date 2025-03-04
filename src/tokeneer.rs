@@ -34,7 +34,6 @@ impl<M: Method> Tokeneer<M> {
         let special = method
             .internal_special()
             .into_iter()
-            .filter(|(k, _)| k.is_ascii())
             .map(|(k, v)| (k.to_string(), TokenSeq::Single(v)))
             .collect::<HashMap<_, _>>();
         let special_regex = build_pattern(special.keys());

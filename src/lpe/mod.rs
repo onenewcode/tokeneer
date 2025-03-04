@@ -2,10 +2,15 @@
 
 use crate::{
     Method, utok,
-    vocab::{CollectedVocab, CompressedVocab},
+    vocab::{CollectedVocab, CompressedVocab, TokenType},
 };
 use patricia_tree::PatriciaMap;
-use std::{collections::HashSet, pin::Pin};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::LazyLock,
+};
 
 pub struct Lpe {
     /// 保存所有词的字符串内容，以 u8 为单位所以不需要对齐，占用空间少
@@ -16,32 +21,73 @@ pub struct Lpe {
     trie: PatriciaMap<utok>,
     /// 用于索引单字节 token，因此不需要其他元信息
     bytes: Box<[utok; 256]>,
+    /// 特殊词汇表
+    special: Box<[utok]>,
     /// token: <unk>
     unk: utok,
 }
 
 impl Lpe {
     pub fn from_vocabs_txt(txt: &[u8]) -> Self {
-        Self::new(
-            unsafe { std::str::from_utf8_unchecked(txt) }
-                .lines()
-                .map(|line| {
-                    line.strip_prefix('"')
-                        .unwrap()
-                        .strip_suffix('"')
-                        .unwrap()
-                        .as_bytes()
-                }),
+        Self::from_collected_vocab(
+            CollectedVocab::collect(
+                unsafe { std::str::from_utf8_unchecked(txt) }
+                    .lines()
+                    .map(|line| {
+                        line.strip_prefix('"')
+                            .unwrap()
+                            .strip_suffix('"')
+                            .unwrap()
+                            .as_bytes()
+                    }),
+                std::iter::repeat(TokenType::Normal),
+                0,
+            ),
             0,
         )
     }
 
-    pub fn new<'a>(vocabs: impl IntoIterator<Item = &'a [u8]>, unk: utok) -> Self {
+    pub fn new<'a>(
+        vocabs: impl IntoIterator<Item = &'a [u8]>,
+        token_type: impl IntoIterator<Item = TokenType>,
+        unk: utok,
+    ) -> Self {
+        Self::from_collected_vocab(CollectedVocab::collect(vocabs, token_type, unk), unk)
+    }
+
+    fn from_collected_vocab(vocab: CollectedVocab, unk: utok) -> Self {
         let CollectedVocab {
             vocabs,
             total_len,
             bytes,
-        } = CollectedVocab::collect(vocabs, unk);
+            special,
+        } = vocab;
+
+        let vocabs = vocabs
+            .into_iter()
+            .enumerate()
+            .map(|(i, token)| {
+                if special.contains(&(i as u32)) {
+                    Cow::Borrowed(token)
+                } else {
+                    let text = unsafe { std::str::from_utf8_unchecked(token) };
+                    let mut utf8 = Vec::new();
+                    for c in text.chars() {
+                        let piece = [c].iter().collect::<String>();
+                        if let Some(&c) = MAP_UTF8_TO_BYTE.get(&piece) {
+                            utf8.push(c)
+                        } else {
+                            let c = c as u8;
+                            utf8.extend_from_slice(format!("[UNK_BYTE_{c:#02x}]").as_bytes())
+                        }
+                    }
+                    Cow::Owned(utf8)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let vocabs = vocabs.iter().map(|s| &**s).collect::<Vec<_>>();
+
         let CompressedVocab { vocabs, slices } = CompressedVocab::new(&vocabs, total_len);
         let tokens = slices
             .into_iter()
@@ -67,6 +113,7 @@ impl Lpe {
             tokens,
             trie,
             bytes,
+            special,
             unk,
         }
     }
@@ -90,9 +137,12 @@ impl Method for Lpe {
     }
     #[inline]
     fn internal_special(&self) -> impl IntoIterator<Item = (&str, utok)> {
-        []
+        self.special.iter().map(|&t| {
+            let s = unsafe { std::str::from_utf8_unchecked(self.token(t)) };
+            (s, t)
+        })
     }
-    #[inline]
+
     fn encode(&self, text: &str) -> impl IntoIterator<Item = utok> + '_ {
         let mut text = text.as_bytes();
         let mut tokens = Vec::<utok>::new();
@@ -112,4 +162,61 @@ impl Method for Lpe {
     fn decode(&self, token: utok) -> &[u8] {
         self.token(token)
     }
+}
+
+static MAP_UTF8_TO_BYTE: LazyLock<HashMap<String, u8>> = LazyLock::new(unicode_utf8_to_byte_map);
+
+fn unicode_utf8_to_byte_map() -> HashMap<String, u8> {
+    let mut map = HashMap::with_capacity(256);
+
+    for ch in 0x21..=0x7E {
+        map.insert(unicode_cpt_to_utf8(ch as _), ch);
+    }
+
+    for ch in 0xA1..=0xAC {
+        map.insert(unicode_cpt_to_utf8(ch as _), ch);
+    }
+
+    for ch in 0xAE..=0xFF {
+        map.insert(unicode_cpt_to_utf8(ch as _), ch);
+    }
+
+    let mut n = 0u32;
+    for ch in 0..256 {
+        let piece = unicode_cpt_to_utf8(ch as _);
+        if !map.contains_key(&piece) {
+            map.insert(unicode_cpt_to_utf8(256 + n), ch as _);
+            n += 1;
+        }
+    }
+
+    map
+}
+
+fn unicode_cpt_to_utf8(cpt: u32) -> String {
+    let mut bytes = Vec::new();
+
+    if cpt <= 0x7F {
+        // 1-byte UTF-8
+        bytes.push(cpt as u8);
+    } else if cpt <= 0x7FF {
+        // 2-byte UTF-8
+        bytes.push(((cpt >> 6) & 0x1F) as u8 | 0xC0);
+        bytes.push((cpt & 0x3F) as u8 | 0x80);
+    } else if cpt <= 0xFFFF {
+        // 3-byte UTF-8
+        bytes.push(((cpt >> 12) & 0x0F) as u8 | 0xE0);
+        bytes.push(((cpt >> 6) & 0x3F) as u8 | 0x80);
+        bytes.push((cpt & 0x3F) as u8 | 0x80);
+    } else if cpt <= 0x10FFFF {
+        // 4-byte UTF-8
+        bytes.push(((cpt >> 18) & 0x07) as u8 | 0xF0);
+        bytes.push(((cpt >> 12) & 0x3F) as u8 | 0x80);
+        bytes.push(((cpt >> 6) & 0x3F) as u8 | 0x80);
+        bytes.push((cpt & 0x3F) as u8 | 0x80);
+    } else {
+        panic!()
+    }
+
+    String::from_utf8(bytes).unwrap()
 }

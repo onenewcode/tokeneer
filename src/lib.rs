@@ -8,6 +8,7 @@ mod vocab;
 pub use bpe::Bpe;
 pub use lpe::Lpe;
 pub use tokeneer::Tokeneer;
+pub use vocab::TokenType;
 
 /// `utok` for token id.
 #[allow(non_camel_case_types)]

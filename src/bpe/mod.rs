@@ -4,15 +4,9 @@ mod algorithm;
 
 use crate::{
     Method, utok,
-    vocab::{CollectedVocab, CompressedVocab},
+    vocab::{CollectedVocab, CompressedVocab, TokenType},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    iter::zip,
-    ops::Deref,
-    pin::Pin,
-    ptr::NonNull,
-};
+use std::{collections::HashSet, iter::zip, ops::Deref, pin::Pin, ptr::NonNull};
 
 pub struct Bpe {
     /// 保存所有词的字符串内容，以 u8 为单位所以不需要对齐，占用空间少
@@ -24,6 +18,8 @@ pub struct Bpe {
     sorted_pieces: Box<[utok]>,
     /// 用于索引单字节 token，因此不需要其他元信息
     bytes: Box<[utok; 256]>,
+    /// 特殊词汇表
+    special: Box<[utok]>,
     /// token: <unk>
     unk: utok,
 }
@@ -78,7 +74,11 @@ impl Bpe {
         });
         // 构造分词器
         Self::from_collected_vocab(
-            CollectedVocab::collect(vocabs.into_iter().map(|s| s.as_bytes()), 0),
+            CollectedVocab::collect(
+                vocabs.into_iter().map(|s| s.as_bytes()),
+                std::iter::repeat(TokenType::Normal),
+                0,
+            ),
             scores,
             0,
         )
@@ -87,15 +87,11 @@ impl Bpe {
     pub fn new<'a>(
         vocabs: impl IntoIterator<Item = &'a str>,
         scores: impl IntoIterator<Item = f32>,
-        is_byte: impl IntoIterator<Item = bool>,
+        token_type: impl IntoIterator<Item = TokenType>,
         unk: utok,
     ) -> Self {
         Self::from_collected_vocab(
-            CollectedVocab::collect_with_hint(
-                vocabs.into_iter().map(|s| s.as_bytes()),
-                is_byte,
-                unk,
-            ),
+            CollectedVocab::collect(vocabs.into_iter().map(|s| s.as_bytes()), token_type, unk),
             scores,
             unk,
         )
@@ -110,6 +106,7 @@ impl Bpe {
             vocabs,
             total_len,
             bytes,
+            special,
         } = vocab;
         let CompressedVocab { vocabs, slices } = CompressedVocab::new(&vocabs, total_len);
         // 收集合词评分
@@ -141,23 +138,27 @@ impl Bpe {
         //     vocabs.len(),
         // );
 
-        Self {
+        let mut ans = Self {
             _vocabs: vocabs,
             tokens,
             sorted_pieces,
             bytes,
+            special,
             unk,
-        }
+        };
+        let inaccessible = ans.inaccessible();
+        ans.special = ans.special.into_iter().chain(inaccessible).collect();
+        ans
     }
 
     /// BPE 词表中，并非所有词都是合词规则可达的。此算法可识别“内部不可达”的 token。
-    pub fn inaccessible(&self) -> HashMap<&str, utok> {
+    fn inaccessible(&self) -> Vec<utok> {
         self.sorted_pieces
             .iter()
             .filter_map(|&t| {
                 let s = unsafe { std::str::from_utf8_unchecked(self.token(t)) };
                 if self.encode(s).into_iter().nth(1).is_some() {
-                    Some((s, t))
+                    Some(t)
                 } else {
                     None
                 }
@@ -198,7 +199,10 @@ impl Method for Bpe {
     }
     #[inline]
     fn internal_special(&self) -> impl IntoIterator<Item = (&str, utok)> {
-        self.inaccessible()
+        self.special.iter().map(|&t| {
+            let s = unsafe { std::str::from_utf8_unchecked(self.token(t)) };
+            (s, t)
+        })
     }
     #[inline]
     fn encode(&self, text: &str) -> impl IntoIterator<Item = utok> + '_ {
@@ -260,6 +264,7 @@ fn rank(scores: &[f32]) -> impl IntoIterator<Item = u32> + '_ {
 #[cfg(test)]
 mod bpe_tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test() {
@@ -289,7 +294,7 @@ mod bpe_tests {
                 1.1, 1.2, 1.3, 1.4, //
                 10.,
             ],
-            [false; 10],
+            [TokenType::Normal; 10],
             0,
         )
     }
@@ -340,7 +345,10 @@ mod bpe_tests {
     #[test]
     fn test_bpe_inaccessible() {
         let bpe = test_bpe();
-        let inaccessible = bpe.inaccessible();
+        let inaccessible = bpe
+            .internal_special()
+            .into_iter()
+            .collect::<HashMap<_, _>>();
         println!("Inaccessible tokens: {:?}", inaccessible);
 
         // 'd' is a single character, so it should be accessible
@@ -367,8 +375,13 @@ mod bpe_tests {
     fn test_bpe_with_byte_tokens() {
         let vocabs = ["a", "b", "<0x41>", "<0x42>"];
         let scores = [1.0, 1.0, 1.0, 1.0];
-        let is_byte = [false, false, true, true];
-        let bpe = Bpe::new(vocabs, scores, is_byte, 0);
+        let token_type = [
+            TokenType::Normal,
+            TokenType::Normal,
+            TokenType::Byte,
+            TokenType::Byte,
+        ];
+        let bpe = Bpe::new(vocabs, scores, token_type, 0);
 
         let encoded: Vec<_> = bpe.encode("aAB").into_iter().collect();
         assert_eq!(encoded, [0, 2, 3], "Expected 3 tokens for input 'aAB'")

@@ -15,3 +15,4 @@ categories = ["algorithms", "encoding"]
 regex = "1.11"
 memchr = "2.7"
 patricia_tree = "0.9"
+log = "0.4"
