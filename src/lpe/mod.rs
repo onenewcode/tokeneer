@@ -43,7 +43,7 @@ impl Lpe {
                 std::iter::repeat(TokenType::Normal),
                 0,
             ),
-            0,
+            false,
         )
     }
 
@@ -51,44 +51,49 @@ impl Lpe {
         vocabs: impl IntoIterator<Item = &'a [u8]>,
         token_type: impl IntoIterator<Item = TokenType>,
         unk: utok,
+        map_utf8: bool,
     ) -> Self {
-        Self::from_collected_vocab(CollectedVocab::collect(vocabs, token_type, unk), unk)
+        Self::from_collected_vocab(CollectedVocab::collect(vocabs, token_type, unk), map_utf8)
     }
 
-    fn from_collected_vocab(vocab: CollectedVocab, unk: utok) -> Self {
+    fn from_collected_vocab(vocab: CollectedVocab, map_utf8: bool) -> Self {
         let CollectedVocab {
             vocabs,
             total_len,
             bytes,
             special,
+            unk,
         } = vocab;
 
-        let vocabs = vocabs
-            .into_iter()
-            .enumerate()
-            .map(|(i, token)| {
-                if special.contains(&(i as u32)) {
-                    Cow::Borrowed(token)
-                } else {
-                    let text = unsafe { std::str::from_utf8_unchecked(token) };
-                    let mut utf8 = Vec::new();
-                    for c in text.chars() {
-                        let piece = [c].iter().collect::<String>();
-                        if let Some(&c) = MAP_UTF8_TO_BYTE.get(&piece) {
-                            utf8.push(c)
-                        } else {
-                            let c = c as u8;
-                            utf8.extend_from_slice(format!("[UNK_BYTE_{c:#02x}]").as_bytes())
+        let CompressedVocab { vocabs, slices } = if map_utf8 {
+            let vocabs = vocabs
+                .into_iter()
+                .enumerate()
+                .map(|(i, token)| {
+                    if special.contains(&(i as u32)) {
+                        Cow::Borrowed(token)
+                    } else {
+                        let text = unsafe { std::str::from_utf8_unchecked(token) };
+                        let mut utf8 = Vec::new();
+                        for c in text.chars() {
+                            let piece = [c].iter().collect::<String>();
+                            if let Some(&c) = MAP_UTF8_TO_BYTE.get(&piece) {
+                                utf8.push(c)
+                            } else {
+                                let c = c as u8;
+                                utf8.extend_from_slice(format!("[UNK_BYTE_{c:#02x}]").as_bytes())
+                            }
                         }
+                        Cow::Owned(utf8)
                     }
-                    Cow::Owned(utf8)
-                }
-            })
-            .collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
+            let vocabs = vocabs.iter().map(|s| &**s).collect::<Vec<_>>();
+            CompressedVocab::new(&vocabs, total_len)
+        } else {
+            CompressedVocab::new(&vocabs, total_len)
+        };
 
-        let vocabs = vocabs.iter().map(|s| &**s).collect::<Vec<_>>();
-
-        let CompressedVocab { vocabs, slices } = CompressedVocab::new(&vocabs, total_len);
         let tokens = slices
             .into_iter()
             .map(|(off, len)| (off as u32, len as u32))

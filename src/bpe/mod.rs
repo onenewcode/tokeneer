@@ -80,7 +80,6 @@ impl Bpe {
                 0,
             ),
             scores,
-            0,
         )
     }
 
@@ -93,20 +92,16 @@ impl Bpe {
         Self::from_collected_vocab(
             CollectedVocab::collect(vocabs.into_iter().map(|s| s.as_bytes()), token_type, unk),
             scores,
-            unk,
         )
     }
 
-    fn from_collected_vocab(
-        vocab: CollectedVocab,
-        scores: impl IntoIterator<Item = f32>,
-        unk: utok,
-    ) -> Self {
+    fn from_collected_vocab(vocab: CollectedVocab, scores: impl IntoIterator<Item = f32>) -> Self {
         let CollectedVocab {
             vocabs,
             total_len,
             bytes,
             special,
+            unk,
         } = vocab;
         let CompressedVocab { vocabs, slices } = CompressedVocab::new(&vocabs, total_len);
         // 收集合词评分

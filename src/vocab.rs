@@ -22,6 +22,8 @@ pub(crate) struct CollectedVocab<'s> {
     pub bytes: Box<[utok; 256]>,
     /// 特殊词汇
     pub special: Box<[utok]>,
+    /// 填充词
+    pub unk: utok,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -84,6 +86,7 @@ impl<'s> CollectedVocab<'s> {
             total_len,
             bytes,
             special: special.into_boxed_slice(),
+            unk,
         }
     }
 }
