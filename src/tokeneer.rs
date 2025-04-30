@@ -1,4 +1,4 @@
-﻿use crate::{Method, utok};
+use crate::{Method, utok};
 use regex::Regex;
 use std::{
     collections::{HashMap, HashSet},
@@ -113,4 +113,27 @@ fn build_pattern<'a>(text: impl IntoIterator<Item = &'a String>) -> Regex {
     pattern.pop();
 
     Regex::new(&pattern).unwrap()
+}
+#[cfg(test)]
+mod test_tokoneer {
+    use std::fs::File;
+
+    use ggus::{GGmlTokenType, GGuf, GGufMetaMapExt};
+    use memmap2::Mmap;
+
+    use crate::Gpt2Tokenizer;
+
+    use super::Tokeneer;
+
+    #[test]
+    fn bpe_from_gguf() {
+        let file =
+            File::open(r"F:\edged\Split-DeepSeek-R1-Distill-Qwen-1.5B-v0.0-F16.gguf").unwrap();
+        let file = unsafe { Mmap::map(&file) }.unwrap();
+        let gguf = GGuf::new(&file).unwrap();
+        let t = Gpt2Tokenizer::load_gguf(&gguf);
+        let model = gguf.tokenizer_ggml_model().unwrap();
+        let b = Tokeneer::new(t);
+        println!("{:?}", b.encode("Hello my name is"));
+    }
 }

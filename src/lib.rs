@@ -1,11 +1,11 @@
-#![deny(warnings)]
-
+#![feature(linked_list_cursors)]
 mod bpe;
+mod gpt2;
 mod lpe;
 mod tokeneer;
 mod vocab;
-
 pub use bpe::Bpe;
+pub use gpt2::Gpt2Tokenizer;
 pub use lpe::Lpe;
 pub use tokeneer::Tokeneer;
 pub use vocab::TokenType;
