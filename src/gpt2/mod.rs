@@ -16,7 +16,7 @@ use untils::llama_escape_whitespace;
 
 use crate::Method;
 
-fn load_gpt2(gguf: &GGuf) -> HashMap<(String, String), usize> {
+fn load_gpt2<T: GGufMetaMapExt>(gguf: &T) -> HashMap<(String, String), usize> {
     gguf.tokenizer_ggml_merges()
         .unwrap()
         .map(|x| {
@@ -111,7 +111,7 @@ impl Gpt2Tokenizer {
     }
 
     //  load 函数 默认都是gpt2
-    pub fn load_gguf(gguf: &GGuf<'_>) -> Gpt2Tokenizer {
+    pub fn load_gguf<T: GGufMetaMapExt>(gguf: &T) -> Gpt2Tokenizer {
         // 添加多模型支持需要根据 tokenizer_ggml_mode 和tokenizer.ggml.pre对词表进行不同的初始化
 
         let mut config = Gpt2Tokenizer::new();
@@ -203,7 +203,7 @@ impl Gpt2Tokenizer {
             .map(|arr| arr.map(|r| r.unwrap()).collect::<Vec<_>>())
             .unwrap();
         // 此处等同于llama.cpp的合并
-        let bpe_ranks = load_gpt2(&gguf);
+        let bpe_ranks = load_gpt2(gguf);
         let mut id_to_token = Vec::with_capacity(tokens.len());
 
         let mut token_to_id: HashMap<String, TokenId> = HashMap::with_capacity(tokens.len());

@@ -1,4 +1,4 @@
-use crate::{Method, utok};
+﻿use crate::{Method, utok};
 use regex::Regex;
 use std::{
     collections::{HashMap, HashSet},
@@ -132,7 +132,6 @@ mod test_tokoneer {
         let file = unsafe { Mmap::map(&file) }.unwrap();
         let gguf = GGuf::new(&file).unwrap();
         let t = Gpt2Tokenizer::load_gguf(&gguf);
-        let model = gguf.tokenizer_ggml_model().unwrap();
         let b = Tokeneer::new(t);
         println!("{:?}", b.encode("Hello my name is"));
     }
