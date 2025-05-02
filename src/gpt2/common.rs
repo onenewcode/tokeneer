@@ -1,4 +1,4 @@
-use crate::gpt2::session::{LlmTokenizerBpeSession, LlmTokenizerSpmSession};
+use crate::gpt2::session::LlmTokenizerBpeSession;
 
 pub const NULL: u32 = u32::MAX;
 pub type TokenId = u32;

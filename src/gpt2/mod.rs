@@ -11,7 +11,7 @@ use common::{NULL, QWEN, TokenAttribute, TokenData, TokenId};
 use ggus::{GGuf, GGufMetaError, GGufMetaMapExt};
 use memmap2::Mmap;
 use session::{LlmTokenizerBpe, LlmTokenizerBpeSession};
-use unicode::unicode_byte_to_utf8;
+use unicode::{unicode_byte_to_utf8, unicode_byte_to_utf8_map};
 use untils::llama_escape_whitespace;
 
 use crate::Method;
@@ -70,6 +70,8 @@ pub struct Gpt2Tokenizer {
     pub id_to_token: Vec<TokenData>,
     pub bpe_ranks: HashMap<(String, String), usize>,
     pub session: RefCell<LlmTokenizerBpeSession>,
+    pub char_hash: HashMap<u8, char>,
+    pub build: RefCell<String>,
 }
 impl Gpt2Tokenizer {
     pub fn new() -> Self {
@@ -107,6 +109,8 @@ impl Gpt2Tokenizer {
                 regex_exprs: vec![QWEN.to_string()],
             })
             .into(),
+            char_hash: unicode_byte_to_utf8_map(),
+            build: String::with_capacity(30).into(),
         }
     }
 
